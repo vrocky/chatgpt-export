@@ -39,15 +39,40 @@ const getTimestamp = require("./util/getTimestamp");
     switch (node.nodeType) {
       case Node.TEXT_NODE:
         nodeMarkdown += node.textContent;
-        // console.log(`Tag: ${tag}`);
+        
+         //console.log(`Tag: ${tag}`);
         // console.log(node);
-        // console.log(`Text: ${text}`);
+       //  console.log(`Text: ${text}`);
         break;
       case Node.ELEMENT_NODE:
         var tag = node.tagName;
         var text = node.textContent;
 
         switch (tag) {
+          case "H1":
+            nodeMarkdown += "<h1>"
+            node.childNodes.forEach(child => {
+              nodeMarkdown += processNode(child);
+            });
+            nodeMarkdown += "</h1>";
+          
+          break;
+          case "H2":
+            nodeMarkdown += "<h2>"
+            node.childNodes.forEach(child => {
+              nodeMarkdown += processNode(child);
+            });
+            nodeMarkdown += "</h2>";
+   
+            break;
+          case "H3":
+            nodeMarkdown += "<h3>"
+            node.childNodes.forEach(child => {
+              nodeMarkdown += processNode(child);
+            });
+            nodeMarkdown += "</h3>";
+     
+            break;
           case "P":
             node.childNodes.forEach(child => {
               nodeMarkdown += processNode(child);
