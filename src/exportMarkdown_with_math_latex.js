@@ -54,7 +54,7 @@ const getTimestamp = require("./util/getTimestamp");
             node.childNodes.forEach(child => {
               nodeMarkdown += processNode(child);
             });
-            nodeMarkdown += "</h1>\n";
+            nodeMarkdown += "</h1>\n\n";
           
           break;
           case "H2":
@@ -62,7 +62,7 @@ const getTimestamp = require("./util/getTimestamp");
             node.childNodes.forEach(child => {
               nodeMarkdown += processNode(child);
             });
-            nodeMarkdown += "</h2>\n";
+            nodeMarkdown += "</h2>\n\n";
    
             break;
           case "H3":
@@ -70,7 +70,7 @@ const getTimestamp = require("./util/getTimestamp");
             node.childNodes.forEach(child => {
               nodeMarkdown += processNode(child);
             });
-            nodeMarkdown += "</h3>\n";
+            nodeMarkdown += "</h3>\n\n";
      
             break;
           case "P":
