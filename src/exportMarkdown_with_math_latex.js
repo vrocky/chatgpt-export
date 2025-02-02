@@ -1,160 +1,110 @@
 const consoleSave = require("./util/consoleSave");
 const getTimestamp = require("./util/getTimestamp");
 
-(function exportMarkdown() {
-  var markdown = "";
-  var elements = document.querySelectorAll("article[data-testid^='conversation-turn']");
-  var timestamp = getTimestamp();
-  markdown += `\`${timestamp}\`\n\n`;
+// Global nodeToMarkdown function
+window.nodeToMarkdown = function(node) {
+  if (!node) return "";
+  
+  // Handle text nodes
+  if (node.nodeType === Node.TEXT_NODE) {
+    return node.textContent;
+  }
 
-  function processNode(node) {
-    let nodeMarkdown = "";
-    var text = node.textContent;
-    if (node.nodeType === Node.TEXT_NODE) {
-      // Directly add the text content from text nodes
-      // console.log(`Tag: ${tag}`);
-      // console.log(node);
-      // console.log(`Text: ${text}`);
-
-      nodeMarkdown += node.textContent;
-      return nodeMarkdown;
-    }
-
-   // Correctly handle KaTeX Math (Block and Inline)
-   if (node.classList.contains("katex-display") || node.classList.contains("katex")) {
+  // Handle KaTeX Math
+  if (node.classList && (node.classList.contains("katex-display") || node.classList.contains("katex"))) {
     let annotationNode = node.querySelector(".katex-mathml annotation");
     if (annotationNode) {
       let latexText = annotationNode.textContent.trim();
       let isBlockMath = node.classList.contains("katex-display");
       return isBlockMath ? `\n$$\n${latexText}\n$$\n\n` : `$${latexText}$`;
     }
-  } 
-
-    switch (node.nodeType) {
-      case Node.TEXT_NODE:
-        nodeMarkdown += node.textContent;
-        
-         //console.log(`Tag: ${tag}`);
-        // console.log(node);
-       //  console.log(`Text: ${text}`);
-        break;
-      case Node.ELEMENT_NODE:
-        var tag = node.tagName;
-        var text = node.textContent;
-
-        switch (tag) {
-          case "H1":
-            nodeMarkdown += "<h1>"
-            node.childNodes.forEach(child => {
-              nodeMarkdown += processNode(child);
-            });
-            nodeMarkdown += "</h1>\n\n";
-          
-          break;
-          case "H2":
-            nodeMarkdown += "<h2>"
-            node.childNodes.forEach(child => {
-              nodeMarkdown += processNode(child);
-            });
-            nodeMarkdown += "</h2>\n\n";
-   
-            break;
-          case "H3":
-            nodeMarkdown += "<h3>"
-            node.childNodes.forEach(child => {
-              nodeMarkdown += processNode(child);
-            });
-            nodeMarkdown += "</h3>\n\n";
-     
-            break;
-          case "P":
-            node.childNodes.forEach(child => {
-              nodeMarkdown += processNode(child);
-            });
-            nodeMarkdown += `\n\n`;
-            break;
-          case "OL":
-            node.childNodes.forEach((listItemNode, index) => {
-              if (listItemNode.nodeType === Node.ELEMENT_NODE && listItemNode.tagName === "LI") {
-                nodeMarkdown += `${index + 1}. ${processNode(listItemNode)}\n`;
-              }
-            });
-            nodeMarkdown += "\n";
-            break;
-          case "UL":
-            node.childNodes.forEach((listItemNode) => {
-              if (listItemNode.nodeType === Node.ELEMENT_NODE && listItemNode.tagName === "LI") {
-                nodeMarkdown += `- ${processNode(listItemNode)}\n`;
-              }
-            });
-            nodeMarkdown += "\n";
-            break;
-          case "PRE":
-            const codeBlockSplit = text.split("Copy code");
-            const codeBlockLang = codeBlockSplit[0].trim();
-            const codeBlockData = codeBlockSplit[1].trim();
-            // console.log(`Tag: ${tag}`);
-            // console.log(node);
-            // console.log(`Text: ${text}`);
-            nodeMarkdown += `\`\`\`${codeBlockLang}\n${codeBlockData}\n\`\`\`\n\n`;
-            break;
-          case "TABLE":
-            // console.log(`Tag: ${tag}`);
-            // console.log(node);
-            // console.log(`Text: ${text}`);
-            node.childNodes.forEach((tableSectionNode) => {
-              if (tableSectionNode.nodeType === Node.ELEMENT_NODE &&
-                  (tableSectionNode.tagName === "THEAD" || tableSectionNode.tagName === "TBODY")) {
-                let tableRows = "";
-                let tableColCount = 0;
-                tableSectionNode.childNodes.forEach((tableRowNode) => {
-                  if (tableRowNode.nodeType === Node.ELEMENT_NODE && tableRowNode.tagName === "TR") {
-                    let tableCells = "";
-                    tableRowNode.childNodes.forEach((tableCellNode) => {
-                      if (tableCellNode.nodeType === Node.ELEMENT_NODE &&
-                          (tableCellNode.tagName === "TD" || tableCellNode.tagName === "TH")) {
-                        tableCells += `| ${tableCellNode.textContent} `;
-                        if (tableSectionNode.tagName === "THEAD") {
-                          tableColCount++;
-                        }
-                      }
-                    });
-                    tableRows += `${tableCells}|\n`;
-                  }
-                });
-                nodeMarkdown += tableRows;
-                if (tableSectionNode.tagName === "THEAD") {
-                  const headerRowDivider = `| ${Array(tableColCount).fill("---").join(" | ")} |\n`;
-                  nodeMarkdown += headerRowDivider;
-                }
-              }
-            });
-            nodeMarkdown += "\n";
-            break;
-          default:
-            node.childNodes.forEach(child => {
-              nodeMarkdown += processNode(child);
-            });
-            break;
-        }
-        break;
-    }
-
-    return nodeMarkdown;
   }
 
-  for (var i = 0; i < elements.length; i++) {
-    var ele = elements[i];
-    let authorLabel = ele.querySelector("[data-testid*='message-participant']")?.textContent || "";
+  // Handle element nodes
+  if (node.nodeType === Node.ELEMENT_NODE) {
+    const tag = node.tagName;
+    const text = node.textContent;
+    let markdown = "";
 
+    switch (tag) {
+      case "H1":
+      case "H2":
+      case "H3":
+        const headerLevel = tag.charAt(1); // Get the header level number
+        markdown = `${'#'.repeat(headerLevel)} `;
+        markdown += Array.from(node.childNodes).map(child => nodeToMarkdown(child)).join("");
+        markdown += '\n\n';
+        break;
+
+      case "P":
+        markdown = Array.from(node.childNodes).map(child => nodeToMarkdown(child)).join("") + "\n\n";
+        break;
+
+      case "OL":
+      case "UL":
+        markdown = Array.from(node.children)
+          .map((li, idx) => {
+            const marker = tag === "OL" ? `${idx + 1}.` : "-";
+            return `${marker} ${nodeToMarkdown(li)}`;
+          })
+          .join("\n") + "\n\n";
+        break;
+
+      case "PRE":
+        const codeBlockParts = text.split("Copy code");
+        markdown = `\`\`\`${codeBlockParts[0].trim()}\n${codeBlockParts[1].trim()}\n\`\`\`\n\n`;
+        break;
+
+      case "TABLE":
+        node.childNodes.forEach((section) => {
+          if (section.nodeType === Node.ELEMENT_NODE &&
+              (section.tagName === "THEAD" || section.tagName === "TBODY")) {
+            let tableRows = "";
+            let colCount = 0;
+            
+            section.querySelectorAll("tr").forEach(row => {
+              let cells = "";
+              row.querySelectorAll("td, th").forEach(cell => {
+                cells += `| ${cell.textContent.trim()} `;
+                if (section.tagName === "THEAD") colCount++;
+              });
+              tableRows += `${cells}|\n`;
+            });
+            
+            markdown += tableRows;
+            if (section.tagName === "THEAD") {
+              markdown += `| ${Array(colCount).fill("---").join(" | ")} |\n`;
+            }
+          }
+        });
+        markdown += "\n";
+        break;
+
+      default:
+        markdown = Array.from(node.childNodes).map(child => nodeToMarkdown(child)).join("");
+    }
+    return markdown;
+  }
+
+  return "";
+};
+
+(function exportMarkdown() {
+  var markdown = "";
+  var elements = document.querySelectorAll("article[data-testid^='conversation-turn']");
+  markdown += `\`${getTimestamp()}\`\n\n`;
+
+  elements.forEach(element => {
+    const authorLabel = element.querySelector("[data-testid*='message-participant']")?.textContent || "";
+    
     if (authorLabel.includes("You")) {
       markdown += `<br>_User_:<br>\n`;
     } else if (authorLabel.includes("ChatGPT") || authorLabel.includes("GPT")) {
       markdown += `<br>_ChatGPT_:<br>\n`;
     }
 
-    markdown += processNode(ele) + "\n";
-  }
+    markdown += nodeToMarkdown(element) + "\n";
+  });
 
   consoleSave(console, "md");
   console.save(markdown);
