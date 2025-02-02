@@ -34,169 +34,117 @@ const getTimestamp = require("./util/getTimestamp");
     return `<div style="line-height: 1.5em; margin-bottom: 0.85em">${child}</div>`;
   }
 
-  // extract chats
-  var elements = document.querySelectorAll("[class*='min-h-[20px]']");
+  // extract chats 
+  var elements = document.querySelectorAll("article[data-testid^='conversation-turn']");
   for (var i = 0; i < elements.length; i++) {
     var ele = elements[i];
+    let authorLabel = ele.querySelector("[data-testid*='message-participant']")?.textContent || "";
+    
+    const isResponse = !authorLabel.includes("You");
 
-    // Get first child
-    var firstChild = ele.firstChild;
-    if (!firstChild) continue;
+    // Start div based on message type
+    if (isResponse) {
+      imageContent += responseStartDiv;
+      imageContent += divWrapper("<em>ChatGPT:</em>");
+    } else {
+      imageContent += promptStartDiv;
+      imageContent += divWrapper("<em>User:</em>");
+    }
 
-    // Element child
-    if (firstChild.nodeType === Node.ELEMENT_NODE) {
-      var isResponse = firstChild.className.includes("request-");
-      var childNodes = firstChild.childNodes;
-
-      // Prefix ChatGPT reponse label
-      if (isResponse) {
-        imageContent += responseStartDiv;
-        imageContent += divWrapper("<em>ChatGPT:</em>");
-      } else {
-        imageContent += promptStartDiv;
+    // Process message content
+    function processContent(node) {
+      if (!node) return "";
+      
+      if (node.nodeType === Node.TEXT_NODE) {
+        return node.textContent;
       }
 
-      // Parse child elements
-      for (var n = 0; n < childNodes.length; n++) {
-        const childNode = childNodes[n];
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const tag = node.tagName;
+        let content = "";
 
-        if (childNode.nodeType === Node.ELEMENT_NODE) {
-          var tag = childNode.tagName;
-          var text = childNode.textContent;
-          // Paragraphs
-          if (tag === "P") {
-            imageContent += divWrapper(text);
-          }
+        switch(tag) {
+          case "P":
+            return divWrapper(Array.from(node.childNodes)
+              .map(child => processContent(child))
+              .join(" "));
+          
+          case "OL":
+          case "UL":
+            let listItems = Array.from(node.children)
+              .map(li => `<li>${processContent(li)}</li>`)
+              .join("");
+            return divWrapper(`<${tag.toLowerCase()}>${listItems}</${tag.toLowerCase()}>`);
 
-          // Get list items
-          if (tag === "OL" || tag === "UL") {
-            listItems = "";
-            childNode.childNodes.forEach((listItemNode) => {
-              if (
-                listItemNode.nodeType === Node.ELEMENT_NODE &&
-                listItemNode.tagName === "LI"
-              ) {
-                listItems += `<li>${listItemNode.textContent}</li>`;
-              }
-            });
-
-            if (tag === "OL") {
-              imageContent += divWrapper(`<ol>${listItems}</ol>`);
-            }
-            if (tag === "UL") {
-              imageContent += divWrapper(`<ul>${listItems}</ul>`);
-            }
-          }
-
-          // Code blocks
-          if (tag === "PRE") {
-            var codeText = "";
-            try {
-              // get spans for syntax highlighting
-              var divChild = childNode.children[0];
-              var codeDivChild = divChild.children[1];
-              var codeBlock = codeDivChild.children[0];
-
-              codeBlock.childNodes.forEach((node) => {
-                var nodeText = node.textContent;
-                switch (node.nodeType) {
-                  case Node.ELEMENT_NODE:
-                    var spanColor = "#ffffff";
-                    if (node.tagName === "SPAN") {
-                      var nodeClass = node.className;
-                      if (nodeClass.includes("-keyword")) {
-                        spanColor = "#267FC5";
-                      }
-                      if (nodeClass.includes("-title")) {
-                        spanColor = "#DC122C";
-                      }
-                      if (nodeClass.includes("-string")) {
-                        spanColor = "#148B61";
-                      }
-                      if (nodeClass.includes("-comment")) {
-                        spanColor = "#6D6D6D";
-                      }
-                      if (nodeClass.includes("-number")) {
-                        spanColor = "#D41366";
-                      }
-                    }
-                    codeText += `<span style="color: ${spanColor};">${nodeText}</span>`;
-                    break;
-                  case Node.TEXT_NODE:
-                  default:
-                    codeText += nodeText;
-                    break;
-                }
-              });
-            } catch (err) {
-              codeText = text.replace("Copy code", "");
-            }
-            imageContent += divWrapper(
-              `<pre style="background: #000; padding:16px; white-space: pre-wrap;">${codeText}</pre>`
+          case "PRE":
+            const codeContent = processCodeBlock(node);
+            return divWrapper(
+              `<pre style="background: #000; padding:16px; white-space: pre-wrap;">${codeContent}</pre>`
             );
-          }
 
-          if (tag === "TABLE") {
-            // Get table sections
-            let tableContent = "";
-            childNode.childNodes.forEach((tableSectionNode) => {
-              if (
-                tableSectionNode.nodeType === Node.ELEMENT_NODE &&
-                (tableSectionNode.tagName === "THEAD" ||
-                  tableSectionNode.tagName === "TBODY")
-              ) {
-                // Get table rows
-                let tableRows = "";
+          case "TABLE":
+            return processTable(node);
 
-                tableSectionNode.childNodes.forEach(
-                  (tableRowNode) => {
-                    if (
-                      tableRowNode.nodeType === Node.ELEMENT_NODE &&
-                      tableRowNode.tagName === "TR"
-                    ) {
-                      // Get table cells
-                      let tableCells = "";
-
-                      tableRowNode.childNodes.forEach(
-                        (tableCellNode) => {
-                          if (
-                            tableCellNode.nodeType ===
-                              Node.ELEMENT_NODE &&
-                            (tableCellNode.tagName === "TD" ||
-                              tableCellNode.tagName === "TH")
-                          ) {
-                            tableCells += `<td>${tableCellNode.textContent}</td>`;
-                          }
-                        }
-                      );
-
-                      tableRows += `<tr>${tableCells}</tr>`;
-                    }
-                  }
-                );
-
-                const sectionTag = tableSectionNode.tagName.toLowerCase();
-                tableContent += `<${sectionTag}>${tableRows}</${sectionTag}>`;
-              }
-            });
-
-            imageContent += divWrapper(`<table>${tableContent}</table>`);
-          }
+          default:
+            return Array.from(node.childNodes)
+              .map(child => processContent(child))
+              .join("");
         }
       }
+      return "";
     }
 
-    // Text child
-    if (firstChild.nodeType === Node.TEXT_NODE) {
-      // Prefix User prompt label
-      imageContent += promptStartDiv;
-      imageContent += divWrapper("<em>Prompt:</em>");
-      var text = firstChild.textContent;
-      imageContent += divWrapper(text);
-    }
+    imageContent += processContent(ele);
+    imageContent += "</div>"; // Close message div
+  }
 
-    // close div
-    imageContent += `</div>`;
+  // Helper functions for code and table processing
+  function processCodeBlock(node) {
+    try {
+      const codeBlock = node.querySelector("code");
+      let codeText = "";
+      
+      codeBlock.childNodes.forEach((node) => {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const spanColor = getCodeSpanColor(node.className);
+          codeText += `<span style="color: ${spanColor};">${node.textContent}</span>`;
+        } else {
+          codeText += node.textContent;
+        }
+      });
+      return codeText;
+    } catch (err) {
+      return node.textContent.replace("Copy code", "");
+    }
+  }
+
+  function getCodeSpanColor(className) {
+    if (className.includes("-keyword")) return "#267FC5";
+    if (className.includes("-title")) return "#DC122C";
+    if (className.includes("-string")) return "#148B61";
+    if (className.includes("-comment")) return "#6D6D6D";
+    if (className.includes("-number")) return "#D41366";
+    return "#ffffff";
+  }
+
+  function processTable(node) {
+    let tableContent = "";
+    const sections = node.querySelectorAll("thead, tbody");
+    
+    sections.forEach(section => {
+      const rows = Array.from(section.querySelectorAll("tr"))
+        .map(row => {
+          const cells = Array.from(row.children)
+            .map(cell => `<td>${cell.textContent}</td>`)
+            .join("");
+          return `<tr>${cells}</tr>`;
+        })
+        .join("");
+      
+      tableContent += `<${section.tagName.toLowerCase()}>${rows}</${section.tagName.toLowerCase()}>`;
+    });
+
+    return divWrapper(`<table>${tableContent}</table>`);
   }
 
   //Edge Blob polyfill https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/toBlob

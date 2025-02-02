@@ -3,146 +3,127 @@ const getTimestamp = require("./util/getTimestamp");
 
 (function exportMarkdown() {
   var markdown = "";
-  var elements = document.querySelectorAll("[class*='min-h-[20px]']");
+  var elements = document.querySelectorAll("article[data-testid^='conversation-turn']");
   var timestamp = getTimestamp();
   markdown += `\`${timestamp}\`\n\n`;
 
-  for (var i = 0; i < elements.length; i++) {
-    var ele = elements[i];
+  function processNode(node) {
+    let nodeMarkdown = "";
+    
+    if (node.nodeType === Node.TEXT_NODE) {
+      nodeMarkdown += node.textContent;
+      return nodeMarkdown;
+    }
 
-    // Get first child
-    var firstChild = ele.firstChild;
-    if (!firstChild) continue;
+    switch (node.nodeType) {
+      case Node.ELEMENT_NODE:
+        var tag = node.tagName;
+        var text = node.textContent;
 
-    // Element child
-    if (firstChild.nodeType === Node.ELEMENT_NODE) {
-      var childNodes = firstChild.childNodes;
-
-      // Prefix ChatGPT reponse label
-      if (firstChild.className.includes("request-")) {
-        markdown += `_ChatGPT_:\n`;
-      }
-
-      // Parse child elements
-      for (var n = 0; n < childNodes.length; n++) {
-        const childNode = childNodes[n];
-
-        if (childNode.nodeType === Node.ELEMENT_NODE) {
-          var tag = childNode.tagName;
-          var text = childNode.textContent;
-          // Paragraphs
-          if (tag === "P") {
-            markdown += `${text}\n`;
-          }
-
-          // Get list items
-          if (tag === "OL") {
-            childNode.childNodes.forEach((listItemNode, index) => {
-              if (
-                listItemNode.nodeType === Node.ELEMENT_NODE &&
-                listItemNode.tagName === "LI"
-              ) {
-                markdown += `${index + 1}. ${
-                  listItemNode.textContent
-                }\n`;
+        switch (tag) {
+          case "H1":
+            nodeMarkdown += "<h1>"
+            node.childNodes.forEach(child => {
+              nodeMarkdown += processNode(child);
+            });
+            nodeMarkdown += "</h1>\n\n";
+            break;
+          case "H2":
+            nodeMarkdown += "<h2>"
+            node.childNodes.forEach(child => {
+              nodeMarkdown += processNode(child);
+            });
+            nodeMarkdown += "</h2>\n\n";
+            break;
+          case "H3":
+            nodeMarkdown += "<h3>"
+            node.childNodes.forEach(child => {
+              nodeMarkdown += processNode(child);
+            });
+            nodeMarkdown += "</h3>\n\n";
+            break;
+          case "P":
+            node.childNodes.forEach(child => {
+              nodeMarkdown += processNode(child);
+            });
+            nodeMarkdown += `\n\n`;
+            break;
+          case "OL":
+            node.childNodes.forEach((listItemNode, index) => {
+              if (listItemNode.nodeType === Node.ELEMENT_NODE && listItemNode.tagName === "LI") {
+                nodeMarkdown += `${index + 1}. ${processNode(listItemNode)}\n`;
               }
             });
-          }
-          if (tag === "UL") {
-            childNode.childNodes.forEach((listItemNode, index) => {
-              if (
-                listItemNode.nodeType === Node.ELEMENT_NODE &&
-                listItemNode.tagName === "LI"
-              ) {
-                markdown += `- ${listItemNode.textContent}\n`;
+            nodeMarkdown += "\n";
+            break;
+          case "UL":
+            node.childNodes.forEach((listItemNode) => {
+              if (listItemNode.nodeType === Node.ELEMENT_NODE && listItemNode.tagName === "LI") {
+                nodeMarkdown += `- ${processNode(listItemNode)}\n`;
               }
             });
-          }
-
-          // Code blocks
-          if (tag === "PRE") {
+            nodeMarkdown += "\n";
+            break;
+          case "PRE":
             const codeBlockSplit = text.split("Copy code");
             const codeBlockLang = codeBlockSplit[0].trim();
             const codeBlockData = codeBlockSplit[1].trim();
-
-            markdown += `\`\`\`${codeBlockLang}\n${codeBlockData}\n\`\`\`\n`;
-          }
-
-          // Tables
-          if (tag === "TABLE") {
-            // Get table sections
-            let tableMarkdown = "";
-            childNode.childNodes.forEach((tableSectionNode) => {
-              if (
-                tableSectionNode.nodeType === Node.ELEMENT_NODE &&
-                (tableSectionNode.tagName === "THEAD" ||
-                  tableSectionNode.tagName === "TBODY")
-              ) {
-                // Get table rows
+            nodeMarkdown += `\`\`\`${codeBlockLang}\n${codeBlockData}\n\`\`\`\n\n`;
+            break;
+          case "TABLE":
+            node.childNodes.forEach((tableSectionNode) => {
+              if (tableSectionNode.nodeType === Node.ELEMENT_NODE &&
+                  (tableSectionNode.tagName === "THEAD" || tableSectionNode.tagName === "TBODY")) {
                 let tableRows = "";
                 let tableColCount = 0;
-                tableSectionNode.childNodes.forEach(
-                  (tableRowNode) => {
-                    if (
-                      tableRowNode.nodeType === Node.ELEMENT_NODE &&
-                      tableRowNode.tagName === "TR"
-                    ) {
-                      // Get table cells
-                      let tableCells = "";
-
-                      tableRowNode.childNodes.forEach(
-                        (tableCellNode) => {
-                          if (
-                            tableCellNode.nodeType ===
-                              Node.ELEMENT_NODE &&
-                            (tableCellNode.tagName === "TD" ||
-                              tableCellNode.tagName === "TH")
-                          ) {
-                            tableCells += `| ${tableCellNode.textContent} `;
-                            if (
-                              tableSectionNode.tagName === "THEAD"
-                            ) {
-                              tableColCount++;
-                            }
-                          }
+                tableSectionNode.childNodes.forEach((tableRowNode) => {
+                  if (tableRowNode.nodeType === Node.ELEMENT_NODE && tableRowNode.tagName === "TR") {
+                    let tableCells = "";
+                    tableRowNode.childNodes.forEach((tableCellNode) => {
+                      if (tableCellNode.nodeType === Node.ELEMENT_NODE &&
+                          (tableCellNode.tagName === "TD" || tableCellNode.tagName === "TH")) {
+                        tableCells += `| ${tableCellNode.textContent} `;
+                        if (tableSectionNode.tagName === "THEAD") {
+                          tableColCount++;
                         }
-                      );
-                      tableRows += `${tableCells}|\n`;
-                    }
+                      }
+                    });
+                    tableRows += `${tableCells}|\n`;
                   }
-                );
-
-                tableMarkdown += tableRows;
-
+                });
+                nodeMarkdown += tableRows;
                 if (tableSectionNode.tagName === "THEAD") {
-                  const headerRowDivider = `| ${Array(tableColCount)
-                    .fill("---")
-                    .join(" | ")} |\n`;
-                  tableMarkdown += headerRowDivider;
+                  nodeMarkdown += `| ${Array(tableColCount).fill("---").join(" | ")} |\n`;
                 }
               }
             });
-            markdown += tableMarkdown;
-          }
-
-          // Paragraph break after each element
-          markdown += "\n";
+            nodeMarkdown += "\n";
+            break;
+          default:
+            node.childNodes.forEach(child => {
+              nodeMarkdown += processNode(child);
+            });
+            break;
         }
-      }
+        break;
     }
 
-    // Text child
-    if (firstChild.nodeType === Node.TEXT_NODE) {
-      // Prefix User prompt label
-      markdown += `_Prompt_: \n`;
-      markdown += `${firstChild.textContent}\n`;
-
-      // End of prompt paragraphs breaks
-      markdown += "\n";
-    }
+    return nodeMarkdown;
   }
 
-  // Save to file
+  for (var i = 0; i < elements.length; i++) {
+    var ele = elements[i];
+    let authorLabel = ele.querySelector("[data-testid*='message-participant']")?.textContent || "";
+
+    if (authorLabel.includes("You")) {
+      markdown += `<br>_User_:<br>\n`;
+    } else if (authorLabel.includes("ChatGPT") || authorLabel.includes("GPT")) {
+      markdown += `<br>_ChatGPT_:<br>\n`;
+    }
+
+    markdown += processNode(ele) + "\n";
+  }
+
   consoleSave(console, "md");
   console.save(markdown);
   return markdown;

@@ -1,173 +1,80 @@
-const consoleSave = require('./util/consoleSave');
-const getTimestamp = require('./util/getTimestamp');
+const consoleSave = require("./util/consoleSave");
+const getTimestamp = require("./util/getTimestamp");
 
 (function exportJSON() {
-  var json = {
-    meta: {
-      timestamp: getTimestamp()
-    },
+  const conversation = {
+    timestamp: getTimestamp(),
+    messages: []
   };
-  var chats = [];
 
-  // Find all chat elements
-  var elements = document.querySelectorAll("[class*='min-h-[20px]']");
+  function processMessageContent(node) {
+    if (!node) return "";
+    
+    // Handle text nodes
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent.trim();
+    }
 
-  for (var i = 0; i < elements.length; i++) {
-    var ele = elements[i];
+    // Handle element nodes
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const tag = node.tagName;
+      let content = "";
 
-    // Prepare object
-    var object = {
-      index: i,
-    };
-    var message = [];
+      switch (tag) {
+        case "P":
+          return Array.from(node.childNodes)
+            .map(child => processMessageContent(child))
+            .join(" ") + "\n";
+        
+        case "OL":
+        case "UL":
+          return Array.from(node.children)
+            .map((li, idx) => {
+              const marker = tag === "OL" ? `${idx + 1}.` : "-";
+              return `${marker} ${processMessageContent(li)}`;
+            })
+            .join("\n") + "\n";
 
-    // Get first child
-    var firstChild = ele.firstChild;
-    if (!firstChild) continue;
+        case "PRE":
+          const codeBlockParts = node.textContent.split("Copy code");
+          return `\`\`\`${codeBlockParts[0].trim()}\n${codeBlockParts[1].trim()}\n\`\`\`\n`;
 
-    // Element child
-    if (firstChild.nodeType === Node.ELEMENT_NODE) {
-      var childNodes = firstChild.childNodes;
+        case "TABLE":
+          let tableContent = [];
+          node.querySelectorAll('tr').forEach(row => {
+            const cells = Array.from(row.children).map(cell => cell.textContent.trim());
+            tableContent.push(cells);
+          });
+          return {
+            type: 'table',
+            content: tableContent
+          };
 
-      // Prefix ChatGPT reponse label
-      if (firstChild.className.includes("request-")) {
-        object.type = "response";
-      }
-
-      // Parse child elements
-      for (var n = 0; n < childNodes.length; n++) {
-        const childNode = childNodes[n];
-
-        if (childNode.nodeType === Node.ELEMENT_NODE) {
-          var tag = childNode.tagName;
-          var text = childNode.textContent;
-          // Paragraphs
-          if (tag === "P") {
-            message.push({
-              type: "p",
-              data: text,
-            });
-          }
-
-          // Get list items
-          if (tag === "OL" || tag === "UL") {
-            const listItems = [];
-            childNode.childNodes.forEach((listItemNode, index) => {
-              if (
-                listItemNode.nodeType === Node.ELEMENT_NODE &&
-                listItemNode.tagName === "LI"
-              ) {
-                listItems.push({
-                  type: "li",
-                  data: listItemNode.textContent,
-                });
-              }
-            });
-
-            if (tag === "OL") {
-              message.push({
-                type: "ol",
-                data: listItems,
-              });
-            }
-            if (tag === "UL") {
-              message.push({
-                type: "ul",
-                data: listItems,
-              });
-            }
-          }
-
-          // Code blocks
-          if (tag === "PRE") {
-            const codeBlockSplit = text.split("Copy code");
-            const codeBlockLang = codeBlockSplit[0].trim();
-            const codeBlockData = codeBlockSplit[1].trim();
-
-            message.push({
-              type: "pre",
-              language: codeBlockLang,
-              data: codeBlockData,
-            });
-          }
-
-          // Tables
-          if (tag === "TABLE") {
-            const tableSections = [];
-
-            // Get table sections
-            childNode.childNodes.forEach((tableSectionNode) => {
-              if (
-                tableSectionNode.nodeType === Node.ELEMENT_NODE &&
-                (tableSectionNode.tagName === "THEAD" ||
-                  tableSectionNode.tagName === "TBODY")
-              ) {
-                // Get table rows
-                const tableRows = [];
-                tableSectionNode.childNodes.forEach(
-                  (tableRowNode) => {
-                    if (
-                      tableRowNode.nodeType === Node.ELEMENT_NODE &&
-                      tableRowNode.tagName === "TR"
-                    ) {
-                      // Get table cells
-                      const tableCells = [];
-                      tableRowNode.childNodes.forEach(
-                        (tableCellNode) => {
-                          if (
-                            tableCellNode.nodeType ===
-                              Node.ELEMENT_NODE &&
-                            (tableCellNode.tagName === "TD" ||
-                              tableCellNode.tagName === "TH")
-                          ) {
-                            tableCells.push({
-                              type: tableCellNode.tagName.toLowerCase(),
-                              data: tableCellNode.textContent,
-                            });
-                          }
-                        }
-                      );
-                      tableRows.push({
-                        type: "tr",
-                        data: tableCells,
-                      });
-                    }
-                  }
-                );
-
-                tableSections.push({
-                  type: tableSectionNode.tagName.toLowerCase(),
-                  data: tableRows,
-                });
-              }
-            });
-
-            message.push({
-              type: "table",
-              data: tableSections,
-            });
-          }
-        }
+        default:
+          return Array.from(node.childNodes)
+            .map(child => processMessageContent(child))
+            .join("");
       }
     }
 
-    // Text child
-    if (firstChild.nodeType === Node.TEXT_NODE) {
-      // Prefix User prompt label
-      object.type = "prompt";
-      message.push(firstChild.textContent);
-    }
-
-    // Add message data to chats
-    object.message = message;
-    chats.push(object);
+    return "";
   }
 
-  // Add chats to JSON output
-  json.chats = chats;
+  const elements = document.querySelectorAll("article[data-testid^='conversation-turn']");
+  
+  elements.forEach(element => {
+    const authorLabel = element.querySelector("[data-testid*='message-participant']")?.textContent || "";
+    const role = authorLabel.includes("You") ? "user" : "assistant";
+    
+    const content = processMessageContent(element);
+    
+    conversation.messages.push({
+      role,
+      content: typeof content === 'object' ? content : content.trim()
+    });
+  });
 
-  // Save to file
   consoleSave(console, "json");
-  console.save(json);
-  return json;
+  console.save(JSON.stringify(conversation, null, 2));
+  return conversation;
 })();

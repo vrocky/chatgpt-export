@@ -3,7 +3,7 @@ const getTimestamp = require("./util/getTimestamp");
 
 (function exportMarkdown() {
   var markdown = "";
-  var elements = document.querySelectorAll("[class*='min-h-[20px]']");
+  var elements = document.querySelectorAll("article[data-testid^='conversation-turn']");
   var timestamp = getTimestamp();
   markdown += `\`${timestamp}\`\n\n`;
 
@@ -20,21 +20,15 @@ const getTimestamp = require("./util/getTimestamp");
       return nodeMarkdown;
     }
 
-    if (node.classList.contains("math")) {
-      isinLine = node.classList.contains("math-inline");
-      var katexMathMLNode = node.querySelector(".katex-mathml");
-      if (katexMathMLNode) {
-        var annotationNode = katexMathMLNode.querySelector("annotation");
-        if (annotationNode) {
-          if (isinLine) {
-            nodeMarkdown += `$${annotationNode.textContent.trim()}$`;
-          } else {
-            nodeMarkdown += `$$\n${annotationNode.textContent.trim()}\n$$\n\n`;
-          }
-        }
-      }
-      return nodeMarkdown;
+   // Correctly handle KaTeX Math (Block and Inline)
+   if (node.classList.contains("katex-display") || node.classList.contains("katex")) {
+    let annotationNode = node.querySelector(".katex-mathml annotation");
+    if (annotationNode) {
+      let latexText = annotationNode.textContent.trim();
+      let isBlockMath = node.classList.contains("katex-display");
+      return isBlockMath ? `\n$$\n${latexText}\n$$\n\n` : `$${latexText}$`;
     }
+  } 
 
     switch (node.nodeType) {
       case Node.TEXT_NODE:
@@ -151,14 +145,14 @@ const getTimestamp = require("./util/getTimestamp");
 
   for (var i = 0; i < elements.length; i++) {
     var ele = elements[i];
-    // console.log(ele)
-    // var firstChild = ele.firstChild;
-    // if (!firstChild) continue;
-    if (ele.nodeType === Node.ELEMENT_NODE && ele.getAttribute("data-message-author-role") === "user") {
+    let authorLabel = ele.querySelector("[data-testid*='message-participant']")?.textContent || "";
+
+    if (authorLabel.includes("You")) {
+      markdown += `<br>_User_:<br>\n`;
+    } else if (authorLabel.includes("ChatGPT") || authorLabel.includes("GPT")) {
       markdown += `<br>_ChatGPT_:<br>\n`;
-    } else if (ele.nodeType === Node.ELEMENT_NODE && ele.getAttribute("data-message-author-role") === "assistant") {
-      markdown += `<br>_Prompt_:<br> \n`;
     }
+
     markdown += processNode(ele) + "\n";
   }
 
